@@ -83,6 +83,37 @@ app.post('/api/folders/:id/notes', async (req, res) => {
   }
 });
 
+app.put('/api/notes/:id', async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Conteúdo obrigatório' });
+    
+    await db.execute({
+      sql: 'UPDATE notes SET content = ? WHERE id = ?',
+      args: [content, req.params.id]
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao atualizar nota' });
+  }
+});
+
+app.delete('/api/notes/:id', async (req, res) => {
+  try {
+    await db.execute({
+      sql: 'DELETE FROM notes WHERE id = ?',
+      args: [req.params.id]
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao excluir nota' });
+  }
+});
+
 app.delete('/api/folders/:id', async (req, res) => {
   try {
     const id = req.params.id;
@@ -113,20 +144,24 @@ app.get('/', (req, res) => {
   <meta charset="UTF-8">
   <title>Segundo Cérebro</title>
   <style>
-    body { font-family: sans-serif; background: #f4f4f4; padding: 20px; display: flex; gap: 20px; margin: 0; }
-    .sidebar { width: 300px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-y: auto; height: calc(100vh - 40px); }
-    .content { flex-grow: 1; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-y: auto; height: calc(100vh - 40px); }
+    body { font-family: 'Bahnschrift', 'Segoe UI', sans-serif; background: #06070d; color: #edf7ff; padding: 20px; display: flex; gap: 20px; margin: 0; }
+    .sidebar { width: 300px; background: rgba(6, 7, 13, 0.8); padding: 15px; border-radius: 8px; box-shadow: 0 0 10px rgba(53,244,255,0.2); border: 1px solid rgba(53,244,255,0.3); overflow-y: auto; height: calc(100vh - 40px); }
+    .content { flex-grow: 1; background: rgba(6, 7, 13, 0.8); padding: 15px; border-radius: 8px; box-shadow: 0 0 10px rgba(53,244,255,0.2); border: 1px solid rgba(53,244,255,0.3); overflow-y: auto; height: calc(100vh - 40px); }
+    h2, h3, h4 { color: #35f4ff; text-shadow: 0 0 15px rgba(53,244,255,0.5); }
+    #current-folder-title { color: #35f4ff !important; text-shadow: 0 0 15px rgba(53,244,255,0.5) !important; }
     ul { list-style-type: none; padding-left: 20px; }
-    .folder { cursor: pointer; color: #0066cc; text-decoration: underline; font-weight: bold; }
-    .folder:hover { color: #004499; }
+    .folder { cursor: pointer; color: #35f4ff; text-decoration: none; font-weight: bold; text-shadow: 0 0 5px rgba(53,244,255,0.5); transition: color 0.2s, text-shadow 0.2s; }
+    .folder:hover { color: #fff; text-shadow: 0 0 15px rgba(53,244,255,0.8); }
     .notes-list { margin-top: 20px; }
-    .note { background: #eee; padding: 10px; margin-bottom: 10px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; }
+    .note { background: #0a0c16; padding: 10px; margin-bottom: 10px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; border: 1px solid rgba(53,244,255,0.2); color: #edf7ff; box-shadow: inset 0 0 5px rgba(53,244,255,0.1); }
     form { margin-top: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
-    input, select, textarea, button { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
-    button { background: #0066cc; color: white; border: none; cursor: pointer; font-weight: bold; }
-    button:hover { background: #004499; }
-    .btn-danger { background: #cc0000; }
-    .btn-danger:hover { background: #990000; }
+    input, select, textarea { padding: 8px; background: #0a0c16; border: 1px solid #35f4ff; color: #edf7ff; border-radius: 4px; font-family: inherit; outline: none; transition: box-shadow 0.2s; }
+    input:focus, select:focus, textarea:focus { box-shadow: 0 0 10px rgba(53,244,255,0.5); }
+    button { padding: 8px; background: #ff3bd4; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-family: inherit; transition: all 0.2s; box-shadow: 0 0 10px rgba(255,59,212,0.5); }
+    button:hover { opacity: 0.8; box-shadow: 0 0 15px rgba(255,59,212,0.8); }
+    .btn-danger { background: #d90429; box-shadow: 0 0 10px rgba(217,4,41,0.5); }
+    .btn-danger:hover { background: #ef233c; box-shadow: 0 0 15px rgba(239,35,60,0.8); opacity: 1; }
+    hr { border: 0; height: 1px; background: #35f4ff; box-shadow: 0 0 5px rgba(53,244,255,0.5); margin: 15px 0; }
   </style>
 </head>
 <body>
@@ -235,7 +270,73 @@ app.get('/', (req, res) => {
             notes.forEach(n => {
               const div = document.createElement('div');
               div.className = 'note';
-              div.textContent = n.content;
+              
+              const contentDiv = document.createElement('div');
+              contentDiv.style.whiteSpace = 'pre-wrap';
+              contentDiv.textContent = n.content;
+              
+              const actionsDiv = document.createElement('div');
+              actionsDiv.style.marginTop = '10px';
+              
+              const editBtn = document.createElement('button');
+              editBtn.textContent = 'Editar';
+              editBtn.style.marginRight = '5px';
+              
+              const deleteBtn = document.createElement('button');
+              deleteBtn.textContent = 'Excluir';
+              deleteBtn.className = 'btn-danger';
+              
+              editBtn.onclick = () => {
+                const ta = document.createElement('textarea');
+                ta.rows = 4;
+                ta.style.width = '100%';
+                ta.style.boxSizing = 'border-box';
+                ta.value = n.content;
+                
+                const saveBtn = document.createElement('button');
+                saveBtn.textContent = 'Salvar';
+                saveBtn.style.marginTop = '5px';
+                saveBtn.style.marginRight = '5px';
+                
+                const cancelBtn = document.createElement('button');
+                cancelBtn.textContent = 'Cancelar';
+                cancelBtn.style.marginTop = '5px';
+                
+                const editForm = document.createElement('div');
+                editForm.appendChild(ta);
+                editForm.appendChild(document.createElement('br'));
+                editForm.appendChild(saveBtn);
+                editForm.appendChild(cancelBtn);
+                
+                div.innerHTML = '';
+                div.appendChild(editForm);
+                
+                cancelBtn.onclick = () => loadNotes();
+                saveBtn.onclick = async () => {
+                  try {
+                    await fetch('/api/notes/' + n.id, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ content: ta.value })
+                    });
+                    loadNotes();
+                  } catch(e) { console.error(e); }
+                };
+              };
+              
+              deleteBtn.onclick = async () => {
+                if (!confirm('Deseja excluir esta nota?')) return;
+                try {
+                  await fetch('/api/notes/' + n.id, { method: 'DELETE' });
+                  loadNotes();
+                } catch(e) { console.error(e); }
+              };
+              
+              actionsDiv.appendChild(editBtn);
+              actionsDiv.appendChild(deleteBtn);
+              
+              div.appendChild(contentDiv);
+              div.appendChild(actionsDiv);
               list.appendChild(div);
             });
         }
