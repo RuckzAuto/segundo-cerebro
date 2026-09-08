@@ -270,7 +270,20 @@ app.get('/', (req, res) => {
             notes.forEach(n => {
               const div = document.createElement('div');
               div.className = 'note';
-              
+
+              const dateDiv = document.createElement('div');
+              dateDiv.style.fontSize = '11px';
+              dateDiv.style.opacity = '0.6';
+              dateDiv.style.marginBottom = '4px';
+              dateDiv.textContent = new Date(n.created_at.replace(' ', 'T') + 'Z').toLocaleString('pt-BR', {
+                timeZone: 'America/Sao_Paulo',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }).replace(', ', ' ');
+
               const contentDiv = document.createElement('div');
               contentDiv.style.whiteSpace = 'pre-wrap';
               contentDiv.textContent = n.content;
@@ -335,6 +348,7 @@ app.get('/', (req, res) => {
               actionsDiv.appendChild(editBtn);
               actionsDiv.appendChild(deleteBtn);
               
+              div.appendChild(dateDiv);
               div.appendChild(contentDiv);
               div.appendChild(actionsDiv);
               list.appendChild(div);
